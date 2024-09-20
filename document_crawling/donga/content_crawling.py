@@ -41,7 +41,7 @@ class ContentCrawling:
                 if cleaned_paragraph:
                     full_content += cleaned_paragraph + '\n\n'
 
-            return full_content
+            return title, full_content
         
         else:
             return "기사 본문을 찾을 수 없습니다."

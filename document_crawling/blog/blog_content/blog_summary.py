@@ -4,14 +4,24 @@ import blog_link
 import blog_content
 import os
 from dotenv import load_dotenv
+import psycopg2
+import numpy as np
 
 load_dotenv()
 
+# 1.PostgreSQL 연결
+user, password, host = os.getenv("DB_USER"), os.getenv("DB_PASSWORD"), os.getenv("DB_HOST")
+
+def connect_db():
+    connection = psycopg2.connect(user=user, password=password, host=host, port=5432)
+    return connection
+
+# 2.OpenAPI key 연결
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+embedding_api_key = os.getenv("UPSTAGE_API_KEY")
 
-# openai API 키 인증
+# 3.openai, embedding API 키 인증
 openai.api_key = OPENAI_API_KEY
-
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 # 모델 - GPT 4o 선택
@@ -37,6 +47,16 @@ system_prompt = """
 """
 
 def main():
+
+    #PostgreSQL 연결
+    connection = connect_db()
+    cursor = connection.cursor()
+
+    insert_query = """
+    INSERT INTO blog_summary (document_no, title, url, behavior, analysis, solution, behavior_emb, behavior_analysis_emb)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """
+
     # 모든 블로그 링크를 가져옵니다
     blog_links = blog_link.BlogLink().get_link()
 
