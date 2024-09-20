@@ -28,7 +28,7 @@ class Properties:
         openai.api_key = OPENAI_API_KEY
         client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-        return OPENAI_API_KEY, embedding_api_key, client
+        return embedding_api_key, client
 
     def model():
 

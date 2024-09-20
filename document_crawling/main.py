@@ -14,6 +14,9 @@ from donga import blog_link, link_crawling, news_content
 from qna import crawl_data
 # 7. api 크롤링 
 import properties
+# 8. openai 임포트
+import openai
+
 
 
 
@@ -44,22 +47,49 @@ def main():
     # 6. 프로퍼티 인스턴스 생성
     properties_instance = properties.Properties()
 
-
     # 7. sql 연결 
-    properties_instance.sql()
+    connection = properties_instance.sql()
+    cursor = connection.cursor()
 
     # 8. api key 가져오기
-    OPENAI_API_KEY, embedding_api_key, client = properties_instance.api_key()
+    embedding_api_key, client = properties_instance.api_key()
+
+    # 9. 임베딩 모델 사용
+
+    embedding_client = OpenAI(
+    api_key= embedding_api_key,
+    base_url="https://api.upstage.ai/v1/solar"
+    )
 
     # 9. 모델 가져오기
     model, system_prompt = properties_instance.model()
 
 
-    # 1. 블로그 내용 크롤링 작성
-    blog_links = bblog_link_instance.get_link()
 
-    for url in blog_links:
-        title, content = bblog_content_instance.get_content(url)
+
+    # 1. 블로그 내용 크롤링 작성
+    bblog_links = bblog_link_instance.get_link()
+
+    bcrawled_data = []
+
+    for url in bblog_links:
+        title, content = blog_content.BlogContent().get_content(url)
+
+        if title and content:
+            content_data = f"제목: {title}\n내용: {content}"
+            bcrawled_data.append({"제목": title, "내용": content_data})
+
+        for data in bcrawled_data:
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": data["내용"]}
+            ]
+
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0,
+            )
 
     
 
