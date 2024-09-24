@@ -15,15 +15,17 @@ class BlogContent:
             # iframe의 src가 상대 경로인 경우 완전한 URL로 만들기
             if iframe_src.startswith('/'):
                 iframe_src = f"https://blog.naver.com{iframe_src}"
+                blog_url = iframe_src
             
             # iframe 내용 가져오기
-            iframe_response = requests.get(iframe_src)
+            iframe_response = requests.get(blog_url)
             iframe_soup = BeautifulSoup(iframe_response.text, 'html.parser')
 
             content_element = iframe_soup.find('div', class_='se-main-container')
             title_element = iframe_soup.find('div', class_='se-module se-module-text se-title-text')
 
             if content_element and title_element:
+
                 # 모든 텍스트 내용을 추출합니다
                 text_content = content_element.get_text(strip=True, separator='\n')
                 text_title = title_element.get_text(strip=True)
@@ -36,6 +38,6 @@ class BlogContent:
                 formatted_content = '\n\n'.join(sentences)
                 
                 # 제목과 본문 내용을 반환합니다
-                return text_title, formatted_content
+                return text_title, formatted_content , blog_url
             else:
-                return None, None
+                return None, None, None

@@ -46,6 +46,7 @@ def main():
 
     # 2. 블로그 글에서 뉴스 링크 크롤링 
     link_crawling_instance = link_crawling.LinkCrawling()
+    
     crawled_data = []
 
     for blog_url in blog_posts:

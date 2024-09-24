@@ -3,6 +3,8 @@ import pandas as pd
 from qna import crawl_data
 import os
 from dotenv import load_dotenv
+from document_crawling.qna.qna_link import QnALink
+from document_crawling.qna.qna import QnACrawler
 
 load_dotenv()
 
@@ -36,37 +38,42 @@ system_prompt = """
 해결방안:  아이의 신체적 활동을 늘리기 위해 재미있고 흥미로운 운동 프로그램을 도입할 수 있습니다. 예를 들어, 놀이를 통해 자연스럽게 운동을 하도록 유도하는 방법입니다. 또한, 물리치료나 운동치료를 통해 중력을 다루는 능력을 향상시키는 것이 필요합니다. 부모는 아이가 신체 활동을 즐길 수 있도록 긍정적인 피드백을 주고, 함께 활동하는 시간을 늘려야 합니다.
 """
 
-crawled_data = []
+def qna_summary():
 
-url = "http://www.ohclinic.net/bbs/board.php?bo_table=h05&wr_id=1"
+    crawled_data = []
 
-question, small_titles, answers = crawl_data(url)
-if question:
-    content = f"질문: {question}\n\n"
-    for j, (title, answer) in enumerate(zip(small_titles, answers), 1):
-        content += f"소제목 {j}: {title}\n답변 {j}: {answer}\n\n"
-    crawled_data.append(content)
+    url = QnALink.get_links()
 
-results = []
+    question, small_titles, answers = QnACrawler.crawl_data(url)
 
-for data in crawled_data:
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": data}
-        ],
-        temperature=0,
-    )
-    summary = response.choices[0].message.content
-    # 제목을 추출하는 로직 추가
-    title = data.split('\n')[0].replace("질문: ", "")
-    results.append({"제목": title, "요약": summary})
+    if question:
+        content = f"질문: {question}\n\n"
+        for j, (title, answer) in enumerate(zip(small_titles, answers), 1):
+            content += f"소제목 {j}: {title}\n답변 {j}: {answer}\n\n"
+        crawled_data.append(content)
 
-# 결과를 DataFrame으로 변환
-df = pd.DataFrame(results)
+    results = []    
 
-# CSV 파일로 저장
-df.to_csv("qna_summaries.csv", index=False, encoding="utf-8-sig")
+    for data in crawled_data:
+        
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": data}
+            ],
+            temperature=0,
+        )
 
-print("요약 결과가 summaries.csv 파일로 저장되었습니다.")
+        summary = response.choices[0].message.content
+        # 제목을 추출하는 로직 추가
+        title = data.split('\n')[0].replace("질문: ", "")
+        results.append({"제목": title, "요약": summary})
+
+    # 결과를 DataFrame으로 변환
+    df = pd.DataFrame(results)
+
+    # CSV 파일로 저장
+    df.to_csv("qna_summaries.csv", index=False, encoding="utf-8-sig")
+
+    print("요약 결과가 summaries.csv 파일로 저장되었습니다.")

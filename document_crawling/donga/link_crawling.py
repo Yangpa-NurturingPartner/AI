@@ -8,7 +8,6 @@ class LinkCrawling:
         # 변수 선언
         links = []
  
-
         url = f'https://www.donga.com/news/Series/70040100000217?p=1&prod=news&ymd=&m='
 
         headers = {
