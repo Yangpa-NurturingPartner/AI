@@ -16,6 +16,7 @@ from qna import qna_link, qna
 import properties
 # 8. openai 임포트
 import openai
+# 9. 오픈서치 임포트
 
 def main():
 
@@ -53,11 +54,11 @@ def main():
     # 8. api key 가져오기
     embedding_api_key, client = properties_instance.api_key()
 
-    # 9. 임베딩 모델 사용
-    embedding_client = OpenAI(
-        api_key= embedding_api_key,
-        base_url="https://api.upstage.ai/v1/solar"
-    )
+    # # 9. 임베딩 모델 사용
+    # embedding_client = OpenAI(
+    #     api_key= embedding_api_key,
+    #     base_url="https://api.upstage.ai/v1/solar"
+    # )
 
     # 10. 모델 가져오기
     model, system_prompt = properties_instance.model()
@@ -71,7 +72,7 @@ def main():
     # ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
     # 12. 임베딩 및 데이터 삽입
 
-    def process_content(idx, title, content, url):
+    def process_content(idx, title, url):
         cursor.execute(insert_query, (idx, title, url))
         connection.commit()
 
@@ -130,7 +131,7 @@ def main():
         blog_link, title, content = bblog_content_instance.get_content(url)
 
         if title and content:
-            process_content(idx, title, content, blog_link)
+            process_content(idx, title, blog_link)
 
     # 2. 화해 크롤링 작성
     blog_posts = make_up_blog_link_instance.get_post_links()
@@ -139,7 +140,7 @@ def main():
     for idx, url in enumerate(news_links, start=idx + 1):
         title, content = make_up_news_content_instance.news_crawling(url)
         if title and content:
-            process_content(idx, title, content, url)
+            process_content(idx, title, url)
 
     # 3. 토닥 크롤링 작성
     todak_posts = todak_blog_link_instance.get_post_links()
@@ -148,7 +149,7 @@ def main():
     for idx, url in enumerate(todak_links, start=idx + 1):
         title, content = todak_news_content_instance.news_crawling(url)
         if title and content:
-            process_content(idx, title, content, url)
+            process_content(idx, title, url)
 
     # 4. 동아 크롤링 작성
     donga_posts = donga_blog_link_instance.links()
@@ -157,7 +158,7 @@ def main():
     for idx, url in enumerate(donga_links, start=idx + 1):
         title, content = donga_news_content_instance.news_crawling(url)
         if title and content:
-            process_content(idx, title, content, url)
+            process_content(idx, title, url)
 
     # 5. QnA 크롤링 작성
     qna_links = qna_link_instance.get_links()
@@ -165,7 +166,7 @@ def main():
     for idx, url in enumerate(qna_links, start=idx + 1):
         title, content = qna_crawl_data_instance.crawl_data(url)
         if title and content:
-            process_content(idx, title, content, url)
+            process_content(idx, title, url)
     
     # 6. 데이터베이스 연결 종료
     connection.close()

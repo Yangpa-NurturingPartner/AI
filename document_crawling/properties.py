@@ -3,13 +3,13 @@ from dotenv import load_dotenv
 import openai
 import psycopg2
 
-class Properties: 
+class Properties:
 
+    load_dotenv()
+
+    # 1.PostgreSQL 연결
     def sql():
 
-        load_dotenv()
-
-        # 1.PostgreSQL 연결
         user, password, host = os.getenv("DB_USER"), os.getenv("DB_PASSWORD"), os.getenv("DB_HOST")
 
         def connect_db():
@@ -18,18 +18,18 @@ class Properties:
         
         return connect_db
         
+    # 2.OpenAPI , embedding API Key 연결
     def api_key():
 
-        # 2.OpenAPI key 연결
         OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
         embedding_api_key = os.getenv("UPSTAGE_API_KEY")
 
-        # 3.openai, embedding API 키 인증
         openai.api_key = OPENAI_API_KEY
         client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
         return embedding_api_key, client
 
+    # 3. 모델 선택 및 설정
     def model():
 
         # 모델 - GPT 4o 선택
@@ -55,3 +55,17 @@ class Properties:
         """
 
         return model, system_prompt
+    
+    # 4. OpenSearch 연결
+    def opensearch():
+
+        host = "192.168.0.152"
+        OPENSEARCH_KEY = os.getenv("OPENSEARCH_KEY")
+
+        client = OpenSearch(
+            hosts=[{'host': host, 'port': 9200}],
+            http_auth=('admin', OPENSEARCH_KEY),
+            use_ssl=True,
+            verify_certs=False)
+
+        return client
