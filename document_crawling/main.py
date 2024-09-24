@@ -64,61 +64,66 @@ def main():
 
     #11. 삽입 쿼리문
     insert_query = """
-    INSERT INTO blog_summary (document_no, title, url, behavior, analysis, solution, behavior_emb, behavior_analysis_emb)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    INSERT INTO blog_summary (document_no, title, url)
+    VALUES (%s, %s, %s)
     """
 
     # ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
     # 12. 임베딩 및 데이터 삽입
+
     def process_content(idx, title, content, url):
-
-        content_data = f"제목: {title}\n내용: {content}"
-        
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": content_data}
-            ],
-            temperature=0,
-        )
-
-        summary = response.choices[0].message.content
-
-        if "아이의 문제행동:" in summary:
-            problem_behavior, behavior_analysis, solution = parse_summary(summary)
-            behavior_emb = create_embedding(problem_behavior)
-            behavior_plus_analysis_emb = create_embedding(problem_behavior + "," + behavior_analysis)
-            
-            cursor.execute(insert_query, (
-                idx, title, url, problem_behavior, behavior_analysis, solution,
-                behavior_emb, behavior_plus_analysis_emb
-            ))
-        else:
-            cursor.execute(insert_query, (
-                idx, title, url, None, None, summary.strip(), None, None
-            ))
-        
+        cursor.execute(insert_query, (idx, title, url))
         connection.commit()
 
-    # 13. 요약 파싱
-    def parse_summary(summary):
+    # def process_content(idx, title, content, url):
 
-        parts = summary.split("아이의 문제행동:")[1].split("문제행동 분석:")
-        problem_behavior = parts[0].strip()
-        behavior_analysis, solution = parts[1].split("해결방안:")
+    #     content_data = f"제목: {title}\n내용: {content}"
+        
+    #     response = client.chat.completions.create(
+    #         model=model,
+    #         messages=[
+    #             {"role": "system", "content": system_prompt},
+    #             {"role": "user", "content": content_data}
+    #         ],
+    #         temperature=0,
+    #     )
 
-        return problem_behavior, behavior_analysis.strip(), solution.strip()
+    #     summary = response.choices[0].message.content
 
-    # 14. 임베딩 생성
-    def create_embedding(text):
-        return embedding_client.embeddings.create(
-            model="solar-embedding-1-large-passage",
-            input=text
-        ).data[0].embedding
+    #     if "아이의 문제행동:" in summary:
+    #         problem_behavior, behavior_analysis, solution = parse_summary(summary)
+    #         behavior_emb = create_embedding(problem_behavior)
+    #         behavior_plus_analysis_emb = create_embedding(problem_behavior + "," + behavior_analysis)
+            
+    #         cursor.execute(insert_query, (
+    #             idx, title, url, problem_behavior, behavior_analysis, solution,
+    #             behavior_emb, behavior_plus_analysis_emb
+    #         ))
+    #     else:
+    #         cursor.execute(insert_query, (
+    #             idx, title, url, None, None, summary.strip(), None, None
+    #         ))
+        
+    #     connection.commit()
+
+    # # 13. 요약 파싱
+    # def parse_summary(summary):
+
+    #     parts = summary.split("아이의 문제행동:")[1].split("문제행동 분석:")
+    #     problem_behavior = parts[0].strip()
+    #     behavior_analysis, solution = parts[1].split("해결방안:")
+
+    #     return problem_behavior, behavior_analysis.strip(), solution.strip()
+
+    # # 14. 임베딩 생성
+    # def create_embedding(text):
+    #     return embedding_client.embeddings.create(
+    #         model="solar-embedding-1-large-passage",
+    #         input=text
+    #     ).data[0].embedding
     
     # ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
-    # 1. 블로그 내용 크롤링 작성
+     # 1. 블로그 내용 크롤링 작성
     bblog_links = bblog_link_instance.get_link()
 
     for idx, url in enumerate(bblog_links, start=1):
