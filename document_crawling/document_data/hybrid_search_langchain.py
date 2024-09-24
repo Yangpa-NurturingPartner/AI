@@ -11,6 +11,7 @@ OPENSEARCH_KEY = os.getenv("OPENSEARCH_KEY")
 host = "192.168.0.152"
 port = 9200
 opensearch_auth = ('admin', OPENSEARCH_KEY)
+
 # Set up the embedding function
 embedding_function = UpstageEmbeddings(
   api_key=UPSTAGE_API_KEY,
