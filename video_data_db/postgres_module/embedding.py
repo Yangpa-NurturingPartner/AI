@@ -3,10 +3,10 @@ import numpy as np
 from openai import OpenAI
 from dotenv import load_dotenv
 load_dotenv()
-upstage_api_key = os.getenv("UPSTAGE_API_KEY")
+UPSTAGE_API_KEY = os.getenv("UPSTAGE_API_KEY")
 # API 클라이언트 설정
 client = OpenAI(
-    api_key=upstage_api_key,
+    api_key=UPSTAGE_API_KEY,
     base_url="https://api.upstage.ai/v1/solar"
 )
 
