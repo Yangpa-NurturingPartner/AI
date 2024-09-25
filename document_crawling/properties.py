@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 import openai
 import psycopg2
+from opensearchpy import OpenSearch
 
 class Properties:
 
@@ -10,24 +11,30 @@ class Properties:
         load_dotenv()
         user, password, host = os.getenv("DB_USER"), os.getenv("DB_PASSWORD"), os.getenv("DB_HOST")
 
-        def connect_db():
-            connection = psycopg2.connect(user=user, password=password, host=host, port=5432)
-            return connection
+        connection = psycopg2.connect(user=user, password=password, host=host, port=5432)
+        return connection
         
-        return connect_db
-        
-    # 2. OpenAPI, embedding API Key 연결
+    # 2. OpenSearch 연결
+    def opensearch(self):
+        load_dotenv()
+        host = "192.168.0.152"
+        OPENSEARCH_KEY = os.getenv("OPENSEARCH_KEY")
+
+        client = OpenSearch(
+            hosts=[{'host': host, 'port': 9200}],
+            http_auth=('admin', OPENSEARCH_KEY),
+            use_ssl=True,
+            verify_certs=False
+        )
+        return client
+    
+    # 3. OpenAPI 연결
     def api_key(self):
         load_dotenv()
         OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-        embedding_api_key = os.getenv("UPSTAGE_API_KEY")
-
         openai.api_key = OPENAI_API_KEY
-        client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-        return embedding_api_key, client
-
-    # 3. 모델 선택 및 설정
+    # 4. 모델 선택 및 설정
     def model(self):
         load_dotenv()
         model = "gpt-4o-mini"
@@ -51,27 +58,9 @@ class Properties:
         """
         return model, system_prompt
     
-    # 4. OpenSearch 연결
-    def opensearch(self):
-        load_dotenv()
-        host = "192.168.0.152"
-        OPENSEARCH_KEY = os.getenv("OPENSEARCH_KEY")
-
-        client = OpenSearch(
-            hosts=[{'host': host, 'port': 9200}],
-            http_auth=('admin', OPENSEARCH_KEY),
-            use_ssl=True,
-            verify_certs=False
-        )
-        return client
-    
-    #5. 임베딩 모델 사용
+    # 5. 임베딩 모델 사용
     def embedding_model(self):
         load_dotenv()
         embedding_api_key = os.getenv("UPSTAGE_API_KEY")
-
-        embedding_client = openai.OpenAI(
-            api_key=embedding_api_key,
-            base_url="https://api.upstage.ai/v1/solar"
-        )
-        return embedding_client
+        openai.api_key = embedding_api_key
+        return openai.Embedding

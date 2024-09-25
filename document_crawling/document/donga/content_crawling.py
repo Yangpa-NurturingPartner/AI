@@ -34,14 +34,14 @@ class ContentCrawling:
             # <br> 태그를 기준으로 문단 나누기
             paragraphs = text.split('오은영 정신건강의학과 전문의·오은영 소아청소년클리닉 원장')[0].split('br')
             
-            full_content = f"제목: {title}\n\n"
+            content = f"제목: {title}\n\n"
 
             for paragraph in paragraphs:
                 cleaned_paragraph = paragraph.strip()
                 if cleaned_paragraph:
-                    full_content += cleaned_paragraph + '\n\n'
+                    content += cleaned_paragraph + '\n\n'
 
-            return title, full_content
+            return title, content
         
         else:
             return "기사 본문을 찾을 수 없습니다."

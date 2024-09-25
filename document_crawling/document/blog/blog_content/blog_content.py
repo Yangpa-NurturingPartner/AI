@@ -28,16 +28,16 @@ class BlogContent:
 
                 # 모든 텍스트 내용을 추출합니다
                 text_content = content_element.get_text(strip=True, separator='\n')
-                text_title = title_element.get_text(strip=True)
+                title = title_element.get_text(strip=True)
                 
                 # 줄바꿈을 정리합니다
                 text_content = re.sub(r'\n+', ' ', text_content)  # 연속된 줄바꿈을 공백으로 대체합니다
                 
                 # 문장 단위로 분리하고 다시 조합합니다
                 sentences = re.split(r'(?<=[.!?])\s+', text_content)
-                formatted_content = '\n\n'.join(sentences)
+                content = '\n\n'.join(sentences)
                 
                 # 제목과 본문 내용을 반환합니다
-                return text_title, formatted_content , blog_url
+                return title, content , blog_url
             else:
                 return None, None, None

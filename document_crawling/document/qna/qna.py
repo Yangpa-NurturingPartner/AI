@@ -3,7 +3,7 @@ import re
 
 class QnACrawler:
    
-    def crawl_data(url):
+    def crawl_data(self, url):
         downloaded = trafilatura.fetch_url(url)
         
         if downloaded:
@@ -16,11 +16,11 @@ class QnACrawler:
                 answers = re.findall(r'▷\s*(.*?)(?=\n▷|\Z)', crawling_data, re.DOTALL)
 
                 title = question
-                content = small_titles + "," + answers
+                # small_titles와 answers를 문자열로 변환하여 연결
+                small_titles_str = ','.join(small_titles)
+                answers_str = ','.join(answers)
+                content = small_titles_str + "," + answers_str
 
                 return title, content
             
-        return None, [], []
-
-
-
+        return None, "", ""

@@ -1,40 +1,25 @@
-from document_crawling.crawler import Crawler
-from document_crawling.opensearch import OpenSearchClient
-from properties import Properties
-import openai
-import os
-from dotenv import load_dotenv
+from data_processing.crawler import crawler
+from database import database
+from data_processing.summary_and_embedding.summary_and_embedding import SummaryAndEmbedding
 
-def main():
-    load_dotenv()
 
-    # 1. 프로퍼티 인스턴스 생성
-    properties_instance = Properties()
+class Main:
 
-    # 2. sql 연결 
-    connection = properties_instance.sql()()
-    cursor = connection.cursor()
+    def main():
 
-    # 3. api key 가져오기
-    embedding_api_key, client = properties_instance.api_key()
+        # 1. 크롤링 및 크롤링 결과 가져오기
+        crawl_results = crawler.Crawler().crawl_all()
 
-    # 4. 임베딩 모델 사용
-    embedding_client = properties_instance.embedding_model()
+        # 2. 크롤링 내용을 데이터 베이스에 저장하기
+        db = database.Database()
+        db.process_content(crawl_results)
 
-    # 5. 모델 가져오기
-    model, system_prompt = properties_instance.model()
+        # 3. 크롤링 내용을 요약하고 임베딩하기
+        summaries, embeddings = SummaryAndEmbedding().summary_and_embedding(crawl_results)
 
-    # 6. 오픈서치 연결 및 인덱스 생성
-    opensearch_client = OpenSearchClient()
-    opensearch_client.create_index()
-
-    # 7. 크롤러 인스턴스 생성 및 크롤링 수행
-    crawler = Crawler(cursor, connection, opensearch_client)
-    crawler.crawl_all()
-
-    # 8. 데이터베이스 연결 종료
-    connection.close()
-    print("크롤링 및 요약 결과가 데이터베이스에 저장되었습니다.")
+        # 4. 요약 및 임베딩 내용을 오픈서치에 적재하기
+        database.Database().process_and_upload_to_opensearch(summaries, embeddings)
 
 if __name__ == "__main__":
-    main()
+    Main.main()
+

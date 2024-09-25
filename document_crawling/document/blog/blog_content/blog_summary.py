@@ -1,18 +1,27 @@
 import openai
 import pandas as pd
 import blog_link
-import link_crawling
-import news_content
+import blog_content
 import os
 from dotenv import load_dotenv
+import psycopg2
+import numpy as np
 
 load_dotenv()
 
+# 1.PostgreSQL 연결
+user, password, host = os.getenv("DB_USER"), os.getenv("DB_PASSWORD"), os.getenv("DB_HOST")
+
+def connect_db():
+    connection = psycopg2.connect(user=user, password=password, host=host, port=5432)
+    return connection
+
+# 2.OpenAPI key 연결
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+embedding_api_key = os.getenv("UPSTAGE_API_KEY")
 
-# openai API 키 인증
+# 3.openai, embedding API 키 인증
 openai.api_key = OPENAI_API_KEY
-
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 # 모델 - GPT 4o 선택
@@ -38,26 +47,27 @@ system_prompt = """
 """
 
 def main():
-    # 0. BlogLink 클래스의 인스턴스를 생성
-    blog_link_instance = blog_link.BlogLink()
 
-    # 1. 오은영의 화해 카테고리 블로그 글들 링크 크롤링
-    blog_posts = blog_link_instance.get_post_links()
+    #PostgreSQL 연결
+    connection = connect_db()
+    cursor = connection.cursor()
 
-    # 2. 블로그 글에서 뉴스 링크 크롤링 
-    link_crawling_instance = link_crawling.LinkCrawling()
-    
+    insert_query = """
+    INSERT INTO blog_summary (document_no, title, url, behavior, analysis, solution, behavior_emb, behavior_analysis_emb)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """
+
+    # 모든 블로그 링크를 가져옵니다
+    blog_links = blog_link.BlogLink().get_link()
+
     crawled_data = []
 
-    for blog_url in blog_posts:
-        news_url = link_crawling_instance.news_link(blog_url)
-        
-        if news_url:
-            # 3. 뉴스 내용 크롤링
-            title, content = news_content.NewsContent.news_crawling(news_url)
-            if title and content:
-                content_data = f"제목: {title}\n내용: {content}"
-                crawled_data.append({"제목": title, "내용": content_data})
+    for url in blog_links:
+        title, content = blog_content.BlogContent().get_content(url)
+
+        if title and content:
+            content_data = f"제목: {title}\n내용: {content}"
+            crawled_data.append({"제목": title, "내용": content_data})
 
     results = []
 
@@ -80,6 +90,7 @@ def main():
             problem_behavior = summary.split("아이의 문제행동:")[1].split("문제행동 분석:")[0].strip()
             behavior_analysis = summary.split("문제행동 분석:")[1].split("해결방안:")[0].strip()
             solution = summary.split("해결방안:")[1].strip()
+            
             results.append({
                 "제목": data["제목"],
                 "아이의 문제행동": problem_behavior,
@@ -92,13 +103,13 @@ def main():
                 "요약": summary.strip()
             })
 
-# 결과를 DataFrame으로 변환
-df = pd.DataFrame(results)
+    # 결과를 DataFrame으로 변환
+    df = pd.DataFrame(results)
 
-# CSV 파일로 저장
-df.to_csv("todak_summaries.csv", index=False, encoding="utf-8-sig")
+    # CSV 파일로 저장
+    df.to_csv("blog_summaries.csv", index=False, encoding="utf-8-sig")
 
-print("요약 결과가 todak_summaries.csv 파일로 저장되었습니다.")
+    print("요약 결과가 blog_summaries.csv 파일로 저장되었습니다.")
 
 if __name__ == "__main__":
     main()
