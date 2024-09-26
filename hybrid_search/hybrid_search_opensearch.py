@@ -88,6 +88,7 @@ if __name__ == "__main__":
     index_name = 'video_data'
     query_text = "example search keyword"
     
+    
     # 하이브리드 검색 실행
     results = hybrid_search(query_text, index_name)
     print("Hybrid search results with RRF:", results)
