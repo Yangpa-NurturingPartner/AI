@@ -2,6 +2,7 @@ import blog_link
 import blog_content
 
 def main():
+    
     # 모든 블로그 링크를 가져옵니다
     blog_links = blog_link.BlogLink().get_link()
 

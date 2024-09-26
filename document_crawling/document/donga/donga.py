@@ -11,9 +11,10 @@ def main():
     
     for link in links:
 
-        content = contentcrawler.content(link)
+        title, content = contentcrawler.content(link)
 
         print(f"URL: {link}")
+        print(f"제목 : {title}")
         print(content)
         print("-" * 50)
 

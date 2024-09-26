@@ -11,12 +11,16 @@ def main():
 
     #2. 블로그 글에서 뉴스 링크 크롤링 
     link_crawling_instance = link_crawling.LinkCrawling()
+
+    results = []
+    
     for blog_url in blog_posts:  # blog_posts가 이제 URL 문자열의 리스트입니다
         news_url = link_crawling_instance.news_link(blog_url)
         
         if news_url:
             #3. 뉴스 내용 크롤링
             title, content = news_content.NewsContent.news_crawling(news_url)
+            results.append((title, content, news_url))  # 제목, 내용, 링크를 튜플로 추가
             
             print("제목:", title)
             print("내용:", content)
