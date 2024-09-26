@@ -36,13 +36,13 @@ class Database:
                 "behavior": summary.get("아이의 문제행동"),
                 "analysis": summary.get("문제행동 분석"),
                 "solution": summary.get("해결방안"),
-                "behavior_plus_analysis": summary.get("아이의 문제행동 + 문제행동 분석"),
+                "behavior_analysis": summary.get("아이의 문제행동 + 문제행동 분석"),
                 "behavior_emb": embedding.get("아이의 문제행동 임베딩"),
-                "behavior_plus_analysis_emb": embedding.get("아이의 문제행동 + 문제행동 분석 임베딩")
+                "behavior_analysis_emb": embedding.get("아이의 문제행동 + 문제행동 분석 임베딩")
             }
 
             response = client.index(
-                index="document_data",  # 인덱스 이름을 적절히 변경하세요
+                index="data_document",  # 인덱스 이름을 적절히 변경하세요
                 id=idx,
                 body=document
             )

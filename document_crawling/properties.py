@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
 import psycopg2
 from opensearchpy import OpenSearch
 
@@ -32,7 +32,10 @@ class Properties:
     def api_key(self):
         load_dotenv()
         OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-        openai.api_key = OPENAI_API_KEY
+
+        client = OpenAI(api_key=OPENAI_API_KEY)
+
+        return client
 
     # 4. 모델 선택 및 설정
     def model(self):
@@ -58,9 +61,13 @@ class Properties:
         """
         return model, system_prompt
     
-    # 5. 임베딩 모델 사용
+    #5. 임베딩 모델 사용
     def embedding_model(self):
         load_dotenv()
         embedding_api_key = os.getenv("UPSTAGE_API_KEY")
-        openai.api_key = embedding_api_key
-        return openai.Embedding
+
+        embedding_client = OpenAI(
+            api_key=embedding_api_key,
+            base_url="https://api.upstage.ai/v1/solar"
+        )
+        return embedding_client

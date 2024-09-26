@@ -1,5 +1,5 @@
 from properties import Properties
-
+import pandas as pd 
 class SummaryAndEmbedding:
 
     def summary_and_embedding(self,results):
@@ -8,13 +8,13 @@ class SummaryAndEmbedding:
         properties = Properties()
 
         # 1. OpenAPI 연결
-        properties.api_key()  # client 객체 반환하지 않음
+        openai_client = properties.api_key()  # client 객체 반환하지 않음
 
         # 2. 모델 선택 및 설정
-        model, system_prompt = properties.model()
+        gpt_model, system_prompt = properties.model()
 
-        # 3. 임베딩 클라이언트 설정
-        properties.embedding_model()
+        # 3. 임베딩 클라이언트
+        embedding_client = properties.embedding_model()
 
         #ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
 
@@ -39,47 +39,56 @@ class SummaryAndEmbedding:
                 {"role": "user", "content": data["내용"]}
             ]
 
-            response = client.chat.completions.create(
-                model=model,
+            response = openai_client.chat.completions.create(
+                model=gpt_model,
                 messages=messages,
                 temperature=0,
             )
+            
 
             summary = response.choices[0].message.content
 
             if "아이의 문제행동:" in summary:
-                problem_behavior = summary.split("아이의 문제행동:")[1].split("문제행동 분석:")[0].strip()
-                behavior_analysis = summary.split("문제행동 분석:")[1].split("해결방안:")[0].strip()
+                behavior = summary.split("아이의 문제행동:")[1].split("문제행동 분석:")[0].strip()
+                analysis = summary.split("문제행동 분석:")[1].split("해결방안:")[0].strip()
                 solution = summary.split("해결방안:")[1].strip()
-                behavior_plus_analysis = problem_behavior + "," + behavior_analysis
+                behavior_analysis = behavior + "\n" + analysis
 
                 summaries.append({
-                    "제목": data["제목"],
-                    "아이의 문제행동": problem_behavior,
-                    "문제행동 분석": behavior_analysis,
-                    "해결방안": solution,
-                    "아이의 문제행동 + 문제행동 분석": behavior_plus_analysis
+                    "title": data["제목"],
+                    "behavior": behavior,
+                    "analysis": analysis,
+                    "solution": solution,
+                    "behavior_analysis": behavior_analysis
                 })
 
-                 # 임베딩 생성
-                behavior_embedding = openai.Embedding.create(
-                    model="solar-embedding-1-large-passage",  # 모델 이름 유지
-                    input=problem_behavior
-                ).data[0].embedding
+                # 임베딩 생성
+                if behavior:
+                    behavior_embedding = embedding_client.embeddings.create(
+                        model="solar-embedding-1-large-passage",
+                        input=behavior
+                    ).data[0].embedding
 
-                behavior_plus_analysis_embedding = openai.Embedding.create(
-                    model="solar-embedding-1-large-passage",  # 모델 이름 유지
-                    input=behavior_plus_analysis
-                ).data[0].embedding
+                if behavior_analysis:
+                    behavior_plus_analysis_embedding = embedding_client.embeddings.create(
+                        model="solar-embedding-1-large-passage",
+                        input=behavior_analysis
+                    ).data[0].embedding
 
                 embeddings.append({
-                    "아이의 문제행동 임베딩": behavior_embedding,
-                    "아이의 문제행동 + 문제행동 분석 임베딩": behavior_plus_analysis_embedding
+                    "behavior_emb": behavior_embedding if behavior else None,
+                    "behavior_analysis_emb": behavior_plus_analysis_embedding if behavior_plus_analysis else None
                 })
             else:
                 summaries.append({
-                    "제목": data["제목"],
-                    "요약": summary.strip()
+                    "title": data["제목"],
+                    "summary": summary.strip()
                 })
+
+        # summaries와 embeddings를 데이터 프레임으로 변환하여 CSV 파일로 저장
+        summaries_df = pd.DataFrame(summaries)
+        embeddings_df = pd.DataFrame(embeddings)
+        summaries_df.to_csv('summaries.csv', index=False)
+        embeddings_df.to_csv('embeddings.csv', index=False)
 
         return summaries, embeddings

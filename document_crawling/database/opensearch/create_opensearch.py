@@ -1,6 +1,6 @@
 class CreateOpensearch:
     # 1. 인덱스 생성 
-    def create_index(client, index_name):
+    def create_index(self,client, index_name):
 
         mapping = {
         "settings": {
@@ -10,11 +10,11 @@ class CreateOpensearch:
         },
         "mappings": {
             "properties": {
-                "vector_document_no": {"type": "integer"},
+                "document_no": {"type": "integer"},
                 "behavior": {"type": "text"},
                 "analysis": {"type": "text"},
-                "behavior_plus_analysis": {"type": "text"},
                 "solution": {"type": "text"},
+                "behavior_analysis": {"type": "text"},
                 "behavior_emb": {
                     "type": "knn_vector",
                     "dimension": 4096,
@@ -28,7 +28,7 @@ class CreateOpensearch:
                         }
                     }
                 },
-                "behavior_plus_analysis_emb": { 
+                "behavior_analysis_emb": { 
                     "type": "knn_vector",
                     "dimension": 4096,
                     "method": {
