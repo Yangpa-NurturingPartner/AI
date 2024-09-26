@@ -68,7 +68,8 @@ async def embedCommunity(content_data: CommunityContent):
         embeddings = embedding_response.data[0].embedding
 
         document = {
-            "title_emb": embeddings,
+            "content": content_data.content,
+            "content_emb": embeddings,
             "board_no": content_data.board,
             "community_no": new_community_no
         }
