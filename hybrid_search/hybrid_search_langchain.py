@@ -5,6 +5,7 @@ from langchain_community.vectorstores import OpenSearchVectorSearch
 from langchain_upstage import UpstageEmbeddings
 from dotenv import load_dotenv
 from opensearchpy import OpenSearch
+from time import time
 warnings.filterwarnings("ignore")
 # Load environment variables
 load_dotenv()
@@ -27,29 +28,28 @@ opensearch_client = OpenSearch(
     verify_certs=False
 )
 
-# Create OpenSearch vector store
-index_name = 'data_video'
-vector_store = OpenSearchVectorSearch(
-    embedding_function=embedding_function,
-    opensearch_url=f"http://{host}:{port}",
-    http_auth=opensearch_auth,
-    index_name=index_name,
-    use_ssl=True,
-    verify_certs=False
-)
-
 def normalize_tmm(scores, fixed_min_value=0.0):
 	arr = np.array(scores)
 	max_value = np.max(arr)
 	norm_score = (arr - fixed_min_value) / (max_value - fixed_min_value)
 	return norm_score
 
-def get_id(prob_no, index_name):
+def get_vector_store(index_name):
+    return OpenSearchVectorSearch(
+        embedding_function=embedding_function,
+        opensearch_url=f"http://{host}:{port}",
+        http_auth=opensearch_auth,
+        index_name=index_name,
+        use_ssl=True,
+        verify_certs=False
+    )
+
+def get_id(pk_no, pk, index_name):
     """Search OpenSearch by prob_no and retrieve the full row of the document."""
     query_body = {
         "query": {
             "match": {
-                "prob_no": prob_no  # Match based on the prob_no field
+                pk: pk_no  # Match based on the prob_no field
             }
         }
     }
@@ -62,52 +62,90 @@ def get_id(prob_no, index_name):
     return None  
 
 # BM25 keyword search function
-def keyword_search(query, index_name, size, text_field):
-    response = opensearch_client.search(
-        index=index_name,
-        body={
-            "query": {
-                "match": {
-                    text_field: query  # text_field is passed here
+def keyword_search(query, index_name, size, text_field, field=None, user_no=None):
+    keyword_start = time()
+    if field=="chat":
+        response = opensearch_client.search(
+            index=index_name,
+            body={
+                "size": size,
+                "query": {
+                    "bool": {
+                        "must": {
+                            "match": {
+                                text_field: query  # text_field에 쿼리 검색
+                            }
+                        },
+                        "filter": {
+                            "term": {
+                                "user_no": user_no  # user_no에 따라 필터링
+                            }
+                        }
+                    }
                 }
-            },
-            "size": size
-        }
-    )
+            }
+        )
+    else:
+        response = opensearch_client.search(
+            index=index_name,
+            body={
+                "query": {
+                    "match": {
+                        text_field: query  # text_field is passed here
+                    }
+                },
+                "size": size
+            }
+        )
     # Extract documents and include OpenSearch document ID
     docs = []
     for hit in response['hits']['hits']:
         source = hit['_source']
         source['id'] = hit['_id']  # Include the document ID
         docs.append({'doc': source, 'score': hit['_score']})
+    keyword_end = time()
+    print(f"keyword search time : {keyword_end - keyword_start}")
     return docs
 
 # Vector search function
-def vector_search(query, index_name, size, text_field, vector_field):
-    # Perform similarity search
-    docs = vector_store.similarity_search_with_relevance_scores(query, k=size, text_field=text_field, vector_field=vector_field)
+def vector_search(query, index_name, size, text_field, vector_field, pk, field=None, user_no=None):
+    vector_start = time()
+    vector_store = get_vector_store(index_name) 
+    if field=="chat":
+        pre_filter = {
+            "term": {
+                "user_no": user_no  # user_no에 따라 필터링
+            }
+        }
+        # Similarity search with pre-filter
+        docs = vector_store.similarity_search_with_relevance_scores(
+            query, 
+            k=size, 
+            text_field=text_field, 
+            vector_field=vector_field,
+            search_type = "script_scoring",
+            pre_filter=pre_filter  
+        )
+    else:
+        # Perform similarity search
+        docs = vector_store.similarity_search_with_relevance_scores(query, k=size, text_field=text_field, vector_field=vector_field)
     # Format the results
     results = []
     for doc, score in docs:
-        doc_content = {
-            'id': get_id(doc.metadata.get('prob_no'), "data_video"),
-            'video_no': doc.metadata.get('video_no'),  # Retrieve from metadata
-            'prob_no': doc.metadata.get('prob_no'),
-            'behavior': doc.metadata.get('behavior'),
-            'analysis': doc.metadata.get('analysis'),
-            'solution': doc.metadata.get('solution'),
-            'behavior_emb': doc.metadata.get('behavior_emb'),
-            'behavior_analysis_emb': doc.metadata.get('behavior_analysis_emb'),
-            'behavior_analysis': doc.metadata.get('behavior_analysis'),
-        }
+        doc_content = {}
+        doc_content['id'] = get_id(doc.metadata.get(pk), pk, index_name)
+        for key in doc.metadata.keys():
+            doc_content[key] = doc.metadata.get(key)
         results.append({'doc': doc_content, 'score': score})
+    vector_end = time()
+    print(f"sementic search time : {vector_end - vector_start}")
     return results
 
 # Perform searches once and reuse results for all hybrid search algorithms
-def perform_searches(query, index_name, text_field, vector_field, size):
+def perform_searches(query, index_name, text_field, vector_field, size, pk, field=None, user_no=None):
     # Perform BM25 and vector searches once
-    bm25_results = keyword_search(query, index_name, size, text_field)
-    vector_results = vector_search(query, index_name, size, text_field, vector_field)
+    bm25_results = keyword_search(query, index_name, size, text_field, field=field, user_no=user_no)
+    vector_results = vector_search(query, index_name, size, text_field, vector_field, pk, field=field, user_no=user_no)
     return bm25_results, vector_results
 
 def rrf_hybrid_search_with_results(bm25_results, vector_results, k=60):
@@ -174,7 +212,7 @@ def tmmcc_hybrid_search_with_results(bm25_results, vector_results, bm25_weight=0
     
     # Normalize both sets of scores
     norm_bm25_scores = normalize_tmm(bm25_scores, fixed_min_value=0.0) if len(bm25_scores) != 0 else bm25_scores
-    norm_vector_scores = normalize_tmm(vector_scores, fixed_min_value=0.0)
+    norm_vector_scores = normalize_tmm(vector_scores, fixed_min_value=0.0) if len(vector_scores) != 0 else vector_scores
     combined_scores = {}
     for i, bm25_res in enumerate(bm25_results):
         doc_id = bm25_res['doc']['id']
@@ -188,7 +226,6 @@ def tmmcc_hybrid_search_with_results(bm25_results, vector_results, bm25_weight=0
             combined_scores[doc_id] += vector_norm_score
         else:
             combined_scores[doc_id] = vector_norm_score
-
     # Sort the documents based on combined TMMCC scores
     sorted_docs = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)
 
@@ -210,7 +247,9 @@ if __name__ == "__main__":
     size = 5
     bm25_weight = 0.2
     vector_weight = 0.8
-    bm25_result, vector_result = perform_searches(query_text, index_name, text_field, vector_field, size=size)
+    pk='prob_no'
+    index_name = "data_video"
+    bm25_result, vector_result = perform_searches(query_text, index_name, text_field, vector_field, size=size, pk=pk)
 
     tmmcc_results = tmmcc_hybrid_search_with_results(bm25_result, vector_result, bm25_weight=bm25_weight, vector_weight=vector_weight)
     for index, (doc, score) in enumerate(tmmcc_results):
