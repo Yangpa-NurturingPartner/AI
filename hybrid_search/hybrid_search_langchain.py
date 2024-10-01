@@ -6,6 +6,10 @@ from langchain_upstage import UpstageEmbeddings
 from dotenv import load_dotenv
 from opensearchpy import OpenSearch
 from time import time
+from concurrent.futures import ThreadPoolExecutor
+from typing import List, Tuple, Any, Optional
+from langchain.docstore.document import Document
+
 warnings.filterwarnings("ignore")
 # Load environment variables
 load_dotenv()
@@ -19,6 +23,54 @@ embedding_function = UpstageEmbeddings(
   api_key=UPSTAGE_API_KEY,
   model="solar-embedding-1-large-query"
 )
+
+class OpenSearchVectorSearchWithID(OpenSearchVectorSearch):
+    
+    def similarity_search_with_score_by_vector(
+        self,
+        embedding: List[float],
+        k: int = 4,
+        score_threshold: Optional[float] = 0.0,
+        **kwargs: Any,
+    ) -> List[Tuple[Document, float, str]]:  # _id를 추가로 반환할 수 있도록 Tuple에 _id 추가
+        """Return docs, scores, and document IDs most similar to the embedding vector.
+
+        Args:
+            embedding: Embedding vector to look up documents similar to.
+            k: Number of Documents to return. Defaults to 4.
+            score_threshold: Specify a score threshold to return only documents
+            above the threshold. Defaults to 0.0.
+
+        Returns:
+            List of Documents, their scores, and their IDs most similar to the query.
+
+        """
+        text_field = kwargs.get("text_field", "text")
+        metadata_field = kwargs.get("metadata_field", "metadata")
+
+        # Perform the raw similarity search using parent class
+        hits = self._raw_similarity_search_with_score_by_vector(
+            embedding=embedding, k=k, score_threshold=score_threshold, **kwargs
+        )
+
+        # Extract document content, scores, and _id
+        documents_with_scores_and_ids = [
+            (
+                Document(
+                    page_content=hit["_source"][text_field],
+                    metadata=(
+                        hit["_source"]
+                        if metadata_field == "*" or metadata_field not in hit["_source"]
+                        else hit["_source"][metadata_field]
+                    ),
+                ),
+                hit["_score"],
+                hit["_id"]  # 문서의 _id 필드 추가
+            )
+            for hit in hits
+        ]
+        
+        return documents_with_scores_and_ids
 
 # Connect to OpenSearch client
 opensearch_client = OpenSearch(
@@ -35,7 +87,7 @@ def normalize_tmm(scores, fixed_min_value=0.0):
 	return norm_score
 
 def get_vector_store(index_name):
-    return OpenSearchVectorSearch(
+    return OpenSearchVectorSearchWithID(
         embedding_function=embedding_function,
         opensearch_url=f"http://{host}:{port}",
         http_auth=opensearch_auth,
@@ -63,7 +115,6 @@ def get_id(pk_no, pk, index_name):
 
 # BM25 keyword search function
 def keyword_search(query, index_name, size, text_field, field=None, user_no=None):
-    keyword_start = time()
     if field=="chat":
         response = opensearch_client.search(
             index=index_name,
@@ -103,49 +154,57 @@ def keyword_search(query, index_name, size, text_field, field=None, user_no=None
         source = hit['_source']
         source['id'] = hit['_id']  # Include the document ID
         docs.append({'doc': source, 'score': hit['_score']})
-    keyword_end = time()
-    print(f"keyword search time : {keyword_end - keyword_start}")
     return docs
 
 # Vector search function
 def vector_search(query, index_name, size, text_field, vector_field, pk, field=None, user_no=None):
-    vector_start = time()
-    vector_store = get_vector_store(index_name) 
-    if field=="chat":
+    # Get the custom vector store instance
+    vector_store = get_vector_store(index_name)
+    # Generate the query embedding
+    embedding = vector_store.embedding_function.embed_query(query)
+    
+    if field == "chat":
         pre_filter = {
             "term": {
                 "user_no": user_no  # user_no에 따라 필터링
             }
         }
-        # Similarity search with pre-filter
-        docs = vector_store.similarity_search_with_relevance_scores(
-            query, 
+
+        docs = vector_store.similarity_search_with_score_by_vector(
+            embedding=embedding, 
             k=size, 
             text_field=text_field, 
             vector_field=vector_field,
-            search_type = "script_scoring",
-            pre_filter=pre_filter  
+            search_type="script_scoring",
+            pre_filter=pre_filter
         )
     else:
         # Perform similarity search
-        docs = vector_store.similarity_search_with_relevance_scores(query, k=size, text_field=text_field, vector_field=vector_field)
+        docs = vector_store.similarity_search_with_score_by_vector(
+            embedding=embedding, 
+            k=size, 
+            text_field=text_field, 
+            vector_field=vector_field
+        )
     # Format the results
     results = []
-    for doc, score in docs:
+    for doc, score, id in docs:
         doc_content = {}
-        doc_content['id'] = get_id(doc.metadata.get(pk), pk, index_name)
+        doc_content['id'] = id
         for key in doc.metadata.keys():
             doc_content[key] = doc.metadata.get(key)
         results.append({'doc': doc_content, 'score': score})
-    vector_end = time()
-    print(f"sementic search time : {vector_end - vector_start}")
     return results
 
 # Perform searches once and reuse results for all hybrid search algorithms
 def perform_searches(query, index_name, text_field, vector_field, size, pk, field=None, user_no=None):
     # Perform BM25 and vector searches once
-    bm25_results = keyword_search(query, index_name, size, text_field, field=field, user_no=user_no)
-    vector_results = vector_search(query, index_name, size, text_field, vector_field, pk, field=field, user_no=user_no)
+    with ThreadPoolExecutor() as executor:
+        bm25_future = executor.submit(keyword_search, query, index_name, size, text_field, field, user_no)
+        vector_future = executor.submit(vector_search, query, index_name, size, text_field, vector_field, pk, field, user_no)
+        
+        bm25_results = bm25_future.result()
+        vector_results = vector_future.result()
     return bm25_results, vector_results
 
 def rrf_hybrid_search_with_results(bm25_results, vector_results, k=60):

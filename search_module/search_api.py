@@ -1,5 +1,4 @@
 import os
-from time import time
 from openai import OpenAI
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -7,7 +6,7 @@ from typing import List, Dict, Optional
 from opensearchpy import OpenSearch
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from search_module.search_index import search_video, search_document, search_community, search_chat, generate_rag_response
+from search_module.search_index import search_video, search_document, search_community, search_chat, generate_rag_response, search_video_document
 load_dotenv()
 
 app = FastAPI()
@@ -109,20 +108,11 @@ async def embedCommunity(content_data: CommunityContent):
 
 @app.post("/search/chat")
 async def RAG_chat(chat_content: ChatContent):
-    print("*"*100)
-    results_start = time()
     query = chat_content.messages[-1]['content']
-    video_results = search_video(query)[:3]
-    document_results = search_document(query)[:3]
-    results_end = time()
-    print(f"서치하는데 걸리는 시간 : {results_end - results_start}")
-    rag_start = time()
-    rag_response = generate_rag_response(query, chat_content.messages, video_results + document_results)  # RAG 로직 호출
-    rag_end = time()
-    print(f"답변하는데 걸리는 시간 : {rag_end - rag_start}")
-    print(f"총 걸린 시간 : {rag_end - results_start}")
-    print("*"*100)
+    results = search_video_document(query)[:6]
+    rag_response = generate_rag_response(query, chat_content.messages, results)  # RAG 로직 호출
     return {"result": rag_response}
+
 
 @app.post("/search/unified")
 async def unified_search(search_query: SearchQuery):
