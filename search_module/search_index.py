@@ -4,7 +4,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from opensearchpy import OpenSearch
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from hybrid_search.hybrid_search_langchain import perform_searches, tmmcc_hybrid_search_with_results
+from hybrid_search.hybrid_search_opensearch import perform_searches, tmmcc_hybrid_search_with_results , perform_multi_searches
 
 load_dotenv()
 OPENSEARCH_KEY = os.getenv("OPENSEARCH_KEY")
@@ -16,6 +16,13 @@ opensearch_client = OpenSearch(
     verify_certs=False
 )
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
+
+def search_video_document(query, size=10, bm25_weight=0.2, vector_weight=0.8):
+    index_names = ["data_video", "data_document"]
+    text_field, vector_field = "behavior_analysis", "behavior_analysis_emb"
+    bm25_result, vector_result = perform_multi_searches(query, index_names, text_field, vector_field, size=size)
+    tmmcc_results = tmmcc_hybrid_search_with_results(bm25_result, vector_result, bm25_weight=bm25_weight, vector_weight=vector_weight)
+    return tmmcc_results
 
 def search_video(query, size=5, bm25_weight=0.2, vector_weight=0.8):
     index_name, pk = 'data_video', "prob_no"
@@ -64,7 +71,6 @@ def generate_rag_response(query, messages, results):
     content += f"질문: {query}\n\n유용한 답변:"
     messages[-1]['content'] = content
     rag_messages = [{"role": "system", "content": system_prompt}] + messages
-    # print(content)    
     response_4o = openai_client.chat.completions.create(
         model=MODEL_4o,
         messages=rag_messages,
