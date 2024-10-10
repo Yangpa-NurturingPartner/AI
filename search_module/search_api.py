@@ -1,4 +1,5 @@
 import os
+from time import time
 from openai import OpenAI
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -37,9 +38,13 @@ opensearch_client = OpenSearch(
 class SearchQuery(BaseModel):
     query: str
     user_no: int = None
+    search_size: int = 8
+    top_k: int = 10
 
 class ChatContent(BaseModel):
     messages: List[Dict[str, str]]
+    search_size: int = 10
+    top_k: int = 4
 
 class ChatQnA(BaseModel):
     user_no : int
@@ -49,8 +54,7 @@ class ChatQnA(BaseModel):
 
 class CommunityContent(BaseModel):
     content: str
-    board_no: int
-    community_no: int
+    board: int
     
 @app.post("/embedded/chat/contents")
 async def embedding_chat(content_data: ChatQnA):
@@ -75,41 +79,62 @@ async def embedding_chat(content_data: ChatQnA):
         )
 
         if response["result"] == "created":
-            return {"status": 200, "why": ""}
+            return {"status": 200, "message": ""}
         else:
-            return {"status": 500, "why": "OpenSearch 저장 실패"}
+            return {"status": 500, "message": "OpenSearch 저장 실패"}
     except Exception as e:
-        return {"status": 500, "why": str(e)}
+        return {"status": 500, "message": str(e)}
 
 @app.post("/embedded/community/contents")
 async def embedCommunity(content_data: CommunityContent):
     try:
+        search_response = opensearch_client.search(
+            index="data_community",
+            body={
+                "size": 1,
+                "sort": [
+                    {"community_no": "desc"}
+                ],
+                "_source": ["community_no"]
+            }
+        )
+        hits = search_response['hits']['hits']
+        if hits:
+            highest_community_no = hits[0]['_source']['community_no']
+        else:
+            highest_community_no = 0
+
+        new_community_no = highest_community_no + 1
+
         embedding_response = embedding_client.embeddings.create(
             model="solar-embedding-1-large-passage",
             input=content_data.content
         )
         embeddings = embedding_response.data[0].embedding
+
         document = {
             "content": content_data.content,
             "content_emb": embeddings,
-            "board_no": content_data.board_no,
-            "community_no": content_data.community_no
+            "board_no": content_data.board,
+            "community_no": new_community_no
         }
+
         response = opensearch_client.index(
             index="data_community",
             body=document
         )
+
         if response["result"] == "created":
-            return {"status": 200, "why": ""}
+            return {"status": 200, "message": ""}
         else:
-            return {"status": 500, "why": "OpenSearch 저장 실패"}
+            return {"status": 500, "message": "OpenSearch 저장 실패"}
     except Exception as e:
-        return {"status": 500, "why": str(e)}
+        return {"status": 500, "message": str(e)}
 
 @app.post("/search/chat")
 async def RAG_chat(chat_content: ChatContent):
     query = chat_content.messages[-1]['content']
-    results = search_video_document(query)[:6]
+    results = search_video_document(query, chat_content.search_size)[:chat_content.top_k]
     rag_response = generate_rag_response(query, chat_content.messages, results)  # RAG 로직 호출
     return {"result": rag_response}
 
@@ -117,11 +142,10 @@ async def RAG_chat(chat_content: ChatContent):
 @app.post("/search/unified")
 async def unified_search(search_query: SearchQuery):
     # 통합 검색에서는 모든 인덱스에서 검색 수행
-    video_results = search_video(search_query.query)
-    document_results = search_document(search_query.query)[:3]
-    community_results = search_community(search_query.query)[:3]
-    chat_results = search_chat(search_query.query, search_query.user_no)[:3]
-    
+    video_results = search_video(search_query.query, search_query.search_size)
+    document_results = search_document(search_query.query, search_query.search_size)[:3]
+    community_results = search_community(search_query.query, search_query.search_size)[:3]
+    chat_results = search_chat(search_query.query, search_query.user_no, search_query.search_size)[:3]
     video_no_list = []
     seen = set()  # 중복 확인용 set
     for result in video_results:
@@ -144,14 +168,12 @@ async def unified_search(search_query: SearchQuery):
 
 @app.post("/search/community")
 async def community_search(search_query: SearchQuery):
-    community_results = search_community(search_query.query, size=8)
-    if len(community_results) > 10:
-         community_results = community_results[:10]
+    community_results = search_community(search_query.query, search_query.search_size)[:search_query.top_k]
     board_no_list = [result[0]["board_no"] for result in community_results]
     return {"board_no_list": board_no_list}
 
 @app.post("/search/chat-history")
 async def chat_history_search(search_query: SearchQuery):
-    chat_results = search_chat(search_query.query, search_query.user_no, size=8)
+    chat_results = search_chat(search_query.query, search_query.user_no, search_query.search_size)[:search_query.top_k]
     session_ids = [result[0]["session_id"] for result in chat_results]
     return {"session_ids": session_ids}
