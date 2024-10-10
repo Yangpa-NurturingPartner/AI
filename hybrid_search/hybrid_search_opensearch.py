@@ -37,10 +37,11 @@ def normalize_tmm(scores, fixed_min_value=0.0):
 	return norm_score
 
 
-def keyword_multi_search(query, index_names, size, text_field):
+def keyword_multi_search(query, index_names, size, text_field, meta_field):
     response = opensearch_client.search(
         index=index_names,  # 리스트로 전달
         body={
+            "_source": meta_field,
             "query": {
                 "multi_match": {
                     "query": query,
@@ -50,7 +51,7 @@ def keyword_multi_search(query, index_names, size, text_field):
             "size": size
         }
     )
-    # Extract documents and include OpenSearch document ID
+
     docs = []
     for hit in response['hits']['hits']:
         source = hit['_source']
@@ -58,7 +59,7 @@ def keyword_multi_search(query, index_names, size, text_field):
         docs.append({'doc': source, 'score': hit['_score']})
     return docs
 
-def vector_multi_search(query, index_names, size, vector_field):
+def vector_multi_search(query, index_names, size, vector_field, meta_field):
     # OpenAI 또는 사용자 정의 임베딩 생성 함수로 임베딩 생성
     embedding = embedding_function.embed_query(query)
 
@@ -74,6 +75,7 @@ def vector_multi_search(query, index_names, size, vector_field):
 
     # 벡터 검색 쿼리 생성
     search_query = {
+        "_source": meta_field,
         "size": size,
         "query": knn_query  # 단일 필드에 대한 KNN 검색
     }
@@ -84,25 +86,20 @@ def vector_multi_search(query, index_names, size, vector_field):
         body=search_query
     )
     
-    # 검색 결과 처리
-    hits = response['hits']['hits']
-    
-    results = []
-    for hit in hits:
-        doc_content = {}
-        doc_content['id'] = hit["_id"]  # 문서 ID
-        for key, value in hit["_source"].items():
-            doc_content[key] = value  # 메타데이터
-        results.append({'doc': doc_content, 'score': hit["_score"]})
-
-    return results
+    docs = []
+    for hit in response['hits']['hits']:
+        source = hit['_source']
+        source['id'] = hit['_id']  # Include the document ID
+        docs.append({'doc': source, 'score': hit['_score']})
+    return docs
 
 # BM25 keyword search function
-def keyword_search(query, index_name, size, text_field, field=None, user_no=None):
+def keyword_search(query, index_name, size, text_field, meta_field, field=None, user_no=None):
     if field=="chat":
         response = opensearch_client.search(
             index=index_name,
             body={
+                "_source": meta_field,
                 "size": size,
                 "query": {
                     "bool": {
@@ -124,6 +121,7 @@ def keyword_search(query, index_name, size, text_field, field=None, user_no=None
         response = opensearch_client.search(
             index=index_name,
             body={
+                "_source": meta_field,
                 "query": {
                     "match": {
                         text_field: query  # text_field is passed here
@@ -142,7 +140,7 @@ def keyword_search(query, index_name, size, text_field, field=None, user_no=None
 
 
 # Vector search function
-def vector_search(query, index_name, size, text_field, vector_field, pk, field=None, user_no=None):
+def vector_search(query, index_name, size, vector_field, meta_field, field=None, user_no=None):
     # OpenAI 또는 사용자 정의 임베딩 생성 함수로 임베딩 생성
     embedding = embedding_function.embed_query(query)
     
@@ -155,6 +153,7 @@ def vector_search(query, index_name, size, text_field, vector_field, pk, field=N
         }
         # OpenSearch k-NN 쿼리 작성 (L2 거리)
         search_query = {
+            "_source": meta_field,
             "size": size,
             "query": {
                 "bool": {
@@ -173,6 +172,7 @@ def vector_search(query, index_name, size, text_field, vector_field, pk, field=N
     else:
         # 필터가 없는 경우 기본 벡터 검색 (L2 거리)
         search_query = {
+            "_source": meta_field,
             "size": size,
             "query": {
                 "knn": {
@@ -189,35 +189,30 @@ def vector_search(query, index_name, size, text_field, vector_field, pk, field=N
         body=search_query
     )
     
-    # 검색 결과 처리
-    hits = response['hits']['hits']
-    
-    results = []
-    for hit in hits:
-        doc_content = {}
-        doc_content['id'] = hit["_id"]  # 문서 ID
-        for key, value in hit["_source"].items():
-            doc_content[key] = value  # 메타데이터
-        results.append({'doc': doc_content, 'score': hit["_score"]}) 
-    return results
+    docs = []
+    for hit in response['hits']['hits']:
+        source = hit['_source']
+        source['id'] = hit['_id']  # Include the document ID
+        docs.append({'doc': source, 'score': hit['_score']})
+    return docs
 
 # Perform searches once and reuse results for all hybrid search algorithms
-def perform_multi_searches(query, index_names, text_field, vector_field, size):
+def perform_multi_searches(query, index_names, text_field, vector_field, size, meta_field="*"):
     # Perform BM25 and vector searches once
     with ThreadPoolExecutor() as executor:
-        bm25_future = executor.submit(keyword_multi_search, query, index_names, size, text_field)
-        vector_future = executor.submit(vector_multi_search, query, index_names, size, vector_field)
+        bm25_future = executor.submit(keyword_multi_search, query, index_names, size, text_field, meta_field)
+        vector_future = executor.submit(vector_multi_search, query, index_names, size, vector_field, meta_field)
         
         bm25_results = bm25_future.result()
         vector_results = vector_future.result()
     return bm25_results, vector_results
 
 # Perform searches once and reuse results for all hybrid search algorithms
-def perform_searches(query, index_name, text_field, vector_field, size, pk, field=None, user_no=None):
+def perform_searches(query, index_name, text_field, vector_field, size, meta_field="*", field=None, user_no=None):
     # Perform BM25 and vector searches once
     with ThreadPoolExecutor() as executor:
-        bm25_future = executor.submit(keyword_search, query, index_name, size, text_field, field, user_no)
-        vector_future = executor.submit(vector_search, query, index_name, size, text_field, vector_field, pk, field, user_no)
+        bm25_future = executor.submit(keyword_search, query, index_name, size, text_field, meta_field, field, user_no)
+        vector_future = executor.submit(vector_search, query, index_name, size, vector_field, meta_field, field, user_no)
         
         bm25_results = bm25_future.result()
         vector_results = vector_future.result()
